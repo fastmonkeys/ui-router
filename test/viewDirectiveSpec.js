@@ -6,18 +6,14 @@ function animateFlush($animate) {
   $animate && $animate.flush && $animate.flush(); // 1.4
 }
 
-function animateFlush($animate) {
-  $animate && $animate.triggerCallbacks && $animate.triggerCallbacks(); // 1.2-1.3
-  $animate && $animate.flush && $animate.flush(); // 1.4
-}
-
 describe('uiView', function () {
   'use strict';
 
-  var scope, $compile, elem;
+  var scope, $compile, elem, log;
 
   beforeEach(function() {
     var depends = ['ui.router'];
+    log = "";
 
     try {
       angular.module('ngAnimate');
@@ -113,6 +109,14 @@ describe('uiView', function () {
     controller: function ($scope, $element) {
       $scope.elementId = $element.attr('id');
     }
+  },
+  nState = {
+    template: 'nState',
+    controller: function ($element) {
+      var data = $element.data('$uiView');
+      data.$animEnter.then(function() { log += "animEnter;"});
+      data.$animLeave.then(function() { log += "animLeave;"});
+    }
   };
 
   beforeEach(module(function ($stateProvider) {
@@ -130,6 +134,7 @@ describe('uiView', function () {
       .state('k', kState)
       .state('l', lState)
       .state('m', mState)
+      .state('n', nState)
   }));
 
   beforeEach(inject(function ($rootScope, _$compile_) {
@@ -578,6 +583,34 @@ describe('uiView', function () {
       // No more animations
       expect($animate.queue.length).toBe(0);
     }));
+
+    it ('should expose animation promises to controllers', inject(function($state, $q, $compile, $animate, $transitions) {
+      $transitions.onStart({}, function($transition$) {
+        name = $transition$.to().name ;
+        log += '>' + name + ';';
+        $transition$.promise.then(function() { log += '=' + name + ';'; })
+      });
+
+      var content = 'Initial Content';
+      elem.append($compile('<div><ui-view>' + content + '</ui-view></div>')(scope));
+      $state.transitionTo('n');
+      $q.flush();
+
+      expect($state.current.name).toBe('n');
+      expect(log).toBe('>n;=n;');
+
+      animateFlush($animate);
+      expect(log).toBe('>n;=n;animEnter;');
+
+      $state.transitionTo('a');
+      $q.flush();
+      expect($state.current.name).toBe('a');
+      expect(log).toBe('>n;=n;animEnter;>a;=a;');
+
+      animateFlush($animate);
+      expect(log).toBe('>n;=n;animEnter;>a;=a;animLeave;');
+    }));
+
   });
 });
 
